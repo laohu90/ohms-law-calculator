@@ -1,0 +1,7 @@
+# robots.txt for FormulaCalcKit Ohm's Law & Electric Power Calculator
+# Allow all search engine crawlers (Googlebot, Bingbot, Baiduspider, etc.)
+User-agent: *
+Allow: /
+
+# Canonical XML Sitemap
+Sitemap: https://formulacalckit.com/sitemap.xml

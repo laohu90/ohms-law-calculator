@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://formulacalckit.com/</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://formulacalckit.com/" />
+  </url>
+  <url>
+    <loc>https://formulacalckit.com/?tab=calculator</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?tab=calculator&amp;lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?tab=calculator&amp;lang=en" />
+  </url>
+  <url>
+    <loc>https://formulacalckit.com/?tab=circuit</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?tab=circuit&amp;lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?tab=circuit&amp;lang=en" />
+  </url>
+  <url>
+    <loc>https://formulacalckit.com/?tab=resistor</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?tab=resistor&amp;lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?tab=resistor&amp;lang=en" />
+  </url>
+  <url>
+    <loc>https://formulacalckit.com/?tab=energy</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?tab=energy&amp;lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?tab=energy&amp;lang=en" />
+  </url>
+  <url>
+    <loc>https://formulacalckit.com/?tab=tutorial</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://formulacalckit.com/?tab=tutorial&amp;lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://formulacalckit.com/?tab=tutorial&amp;lang=en" />
+  </url>
+</urlset>

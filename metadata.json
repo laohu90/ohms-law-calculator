@@ -1,0 +1,6 @@
+{
+  "name": "欧姆定律与电功率万能计算器",
+  "description": "专业级欧姆定律与电功率推导计算器，支持输入任意两量求全参数、串并联电路分压分流分析、电阻色环解码与电学深度教程。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
