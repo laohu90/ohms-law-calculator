@@ -1,3 +1,4 @@
+import { SupportedLang, resolveInitialLanguage } from './i18n/translations';
 /**
  * Main Application Component for Ohm's Law & Electric Power Calculator.
  * Styled in FormulaCalcKit signature layout (density-calculator & linear-function-calculator).
@@ -17,7 +18,22 @@ import { useSeoHead } from './utils/useSeoHead';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('calculator');
-  const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const [langState, setLangState] = useState<{ currentLang: SupportedLang; isAuto: boolean }>(() => {
+    const init = resolveInitialLanguage();
+    return { currentLang: init.lang, isAuto: init.isAuto };
+  });
+  const lang = (langState.currentLang === 'zh' ? 'zh' : 'en') as 'en' | 'zh';
+  const isAuto = langState.isAuto;
+  const setLang = (newLang: 'en' | 'zh') => {
+    setLangState({ currentLang: newLang, isAuto: false });
+    try {
+      localStorage.setItem('ohms_law_user_chosen_lang_v3', newLang);
+      localStorage.removeItem('ohms_law_lang');
+    } catch {}
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', newLang);
+    window.history.pushState({}, '', url.toString());
+  };
   const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
   const [resetKey, setResetKey] = useState<number>(0);
 
