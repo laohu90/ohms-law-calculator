@@ -1,32 +1,47 @@
 @import "tailwindcss";
 
 @layer base {
-  html, body, #root {
-    max-width: 100vw;
-    overflow-x: hidden;
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
+    background-color: #0c0f17;
+    color: #e2e8f0;
+    overflow-x: hidden;
   }
 
-  code, kbd, samp, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+  /* Tabular numbers for all engineering readouts */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom animation for electron dots in circuit diagram */
-@keyframes flowAlongWire {
+/* Custom wire dash animation for electron flow */
+@keyframes electronFlowForward {
   0% {
-    stroke-dashoffset: 24;
+    stroke-dashoffset: 40;
   }
   100% {
     stroke-dashoffset: 0;
   }
 }
 
-.animate-electron-flow {
-  animation: flowAlongWire 1s linear infinite;
+@keyframes electronFlowReverse {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 40;
+  }
 }
 
+.animate-flow-forward {
+  animation: electronFlowForward 1.5s linear infinite;
+}
 
+.animate-flow-reverse {
+  animation: electronFlowReverse 1.5s linear infinite;
+}

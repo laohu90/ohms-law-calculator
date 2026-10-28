@@ -1,828 +1,811 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  TargetParameter,
-  VoltageUnit,
-  CurrentUnit,
-  ResistanceUnit,
-  PowerUnit,
-  PrecisionConfig,
-  HistoryItem,
-  RelatedToolId,
-} from './types/ohms';
-import {
+  VariableType,
+  PrecisionMode,
   VOLTAGE_UNITS,
   CURRENT_UNITS,
   RESISTANCE_UNITS,
   POWER_UNITS,
-  formatWithPrecision,
-  getUnitSymbol,
-  toSI,
-} from './utils/unitConverter';
-import { calculateOhmsLaw } from './utils/ohmsEngine';
-import { useTranslation } from './i18n/useTranslation';
-import { Language } from './i18n/translations';
-
-// Components
-import { CircuitDiagram } from './components/CircuitDiagram';
-import { SolutionSteps } from './components/SolutionSteps';
-import { ReverseVerification } from './components/ReverseVerification';
-import { HistoryPanel } from './components/HistoryPanel';
-import { PrecisionSettingsModal } from './components/PrecisionSettingsModal';
-import { ShareModal } from './components/ShareModal';
-import { FormulaWheel } from './components/FormulaWheel';
-import { FormulaExpressionParser } from './components/FormulaExpressionParser';
-
-// Related tools
-import { ResistorColorCode } from './components/tools/ResistorColorCode';
-import { VoltageDivider } from './components/tools/VoltageDivider';
-import { PowerCostCalculator } from './components/tools/PowerCostCalculator';
-import { LedResistorCalculator } from './components/tools/LedResistorCalculator';
-
+  UnitDefinition,
+  solveOhmsLaw,
+  formatValueWithPrecision,
+  evaluatePowerSafety,
+} from './utils/calculator';
+import { CircuitVisualizer } from './components/CircuitVisualizer';
+import { OhmsWheel } from './components/OhmsWheel';
+import { DerivationPanel } from './components/DerivationPanel';
+import { NetworkSchematic } from './components/NetworkSchematic';
+import { ResistorDecoder } from './components/ResistorDecoder';
+import { ACInspector } from './components/ACInspector';
+import { PracticalTools } from './components/PracticalTools';
+import { ReportModal } from './components/ReportModal';
+import { I18N, Lang } from './i18n';
 import {
   Zap,
   Sliders,
-  Share2,
-  Moon,
-  Sun,
-  AlertTriangle,
   RotateCcw,
-  Disc,
-  GitFork,
-  DollarSign,
-  Lightbulb,
-  Check,
-  Globe,
-  Calculator,
-  PieChart,
+  Download,
+  ShieldAlert,
+  ChevronDown,
+  Layers,
+  Sparkles,
+  Cpu,
+  BookmarkCheck,
+  Languages,
 } from 'lucide-react';
 
-const STORAGE_KEY_HISTORY = 'ohms_calculator_history_v2';
-const STORAGE_KEY_THEME = 'ohms_calculator_theme_v2';
-
 export default function App() {
-  const { lang, setLanguage, t, languages } = useTranslation();
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<'core' | 'network' | 'decoder' | 'ac' | 'tools'>('core');
+  const [lang, setLang] = useState<Lang>('zh');
 
-  // --- STATE MANAGEMENT ---
-  const [target, setTarget] = useState<TargetParameter>('I');
+  const t = I18N[lang];
 
-  const [uValStr, setUValStr] = useState<string>('12');
-  const [uUnit, setUUnit] = useState<VoltageUnit>('V');
+  // Active input selections: which 2 of the 4 variables are user inputs
+  const [inputVariables, setInputVariables] = useState<[VariableType, VariableType]>(['voltage', 'resistance']);
 
-  const [iValStr, setIValStr] = useState<string>('3');
-  const [iUnit, setIUnit] = useState<CurrentUnit>('A');
+  // Base raw numeric values in fundamental SI units (V, A, Ω, W)
+  const [voltage, setVoltage] = useState<number>(12); // 12V
+  const [resistance, setResistance] = useState<number>(240); // 240 Ω
+  const [current, setCurrent] = useState<number>(0.05); // 50 mA
+  const [power, setPower] = useState<number>(0.6); // 0.6 W
 
-  const [rValStr, setRValStr] = useState<string>('4');
-  const [rUnit, setRUnit] = useState<ResistanceUnit>('ohm');
+  // Unit multiplier selectors for display
+  const [vUnit, setVUnit] = useState<UnitDefinition>(VOLTAGE_UNITS[2]); // V
+  const [iUnit, setIUnit] = useState<UnitDefinition>(CURRENT_UNITS[3]); // mA
+  const [rUnit, setRUnit] = useState<UnitDefinition>(RESISTANCE_UNITS[1]); // Ω
+  const [pUnit, setPUnit] = useState<UnitDefinition>(POWER_UNITS[4]); // W
 
-  const [pValStr, setPValStr] = useState<string>('36');
-  const [pUnit, setPUnit] = useState<PowerUnit>('W');
+  // High precision controls (Directly solving Shortcoming #3)
+  const [precisionMode, setPrecisionMode] = useState<PrecisionMode>('sigfigs');
+  const [precisionDigits, setPrecisionDigits] = useState<number>(4);
 
-  const [precision, setPrecision] = useState<PrecisionConfig>({
-    mode: 'decimal',
-    decimalPlaces: 4,
-    significantFigures: 4,
-    useScientific: false,
-    useThousandsSeparator: false,
-  });
+  // Report modal state
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_THEME);
-    if (saved !== null) return saved === 'dark';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  // Compute remaining 2 variables based on active inputs
+  const isVInput = inputVariables.includes('voltage');
+  const isIInput = inputVariables.includes('current');
+  const isRInput = inputVariables.includes('resistance');
+  const isPInput = inputVariables.includes('power');
 
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+  const { solved, activeFormulas, derivations } = solveOhmsLaw(
+    isVInput ? voltage : null,
+    isIInput ? current : null,
+    isRInput ? resistance : null,
+    isPInput ? power : null
+  );
+
+  // Sync state when solved values change
+  useEffect(() => {
+    if (!isVInput && solved.voltage !== null && !isNaN(solved.voltage)) {
+      setVoltage(solved.voltage);
     }
-  });
+    if (!isIInput && solved.current !== null && !isNaN(solved.current)) {
+      setCurrent(solved.current);
+    }
+    if (!isRInput && solved.resistance !== null && !isNaN(solved.resistance)) {
+      setResistance(solved.resistance);
+    }
+    if (!isPInput && solved.power !== null && !isNaN(solved.power)) {
+      setPower(solved.power);
+    }
+  }, [isVInput, isIInput, isRInput, isPInput, solved.voltage, solved.current, solved.resistance, solved.power]);
 
-  // Toggles & Modals
-  const [isPrecisionModalOpen, setIsPrecisionModalOpen] = useState<boolean>(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
-  const [showFormulaWheel, setShowFormulaWheel] = useState<boolean>(true);
-  const [showExpressionParser, setShowExpressionParser] = useState<boolean>(false);
-
-  const [activeRelatedTool, setActiveRelatedTool] = useState<RelatedToolId | 'none'>('none');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  // Toggle which variables are active inputs
+  const handleToggleInput = (v: VariableType) => {
+    if (inputVariables.includes(v)) return; // Already an input
+    // Replace the first input variable with the new one
+    setInputVariables([inputVariables[1], v]);
   };
 
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'light');
+  // Preset scenarios
+  const applyPreset = (presetName: string) => {
+    if (presetName === 'led') {
+      setInputVariables(['voltage', 'current']);
+      setVoltage(5);
+      setCurrent(0.02); // 20mA LED
+      setVUnit(VOLTAGE_UNITS[2]);
+      setIUnit(CURRENT_UNITS[3]);
+    } else if (presetName === 'auto') {
+      setInputVariables(['voltage', 'power']);
+      setVoltage(12);
+      setPower(55); // 55W automotive halogen bulb
+      setVUnit(VOLTAGE_UNITS[2]);
+      setPUnit(POWER_UNITS[4]);
+    } else if (presetName === 'usb') {
+      setInputVariables(['voltage', 'current']);
+      setVoltage(5);
+      setCurrent(2.4); // 5V 2.4A USB fast charger
+      setVUnit(VOLTAGE_UNITS[2]);
+      setIUnit(CURRENT_UNITS[4]);
+    } else if (presetName === 'heater') {
+      setInputVariables(['voltage', 'power']);
+      setVoltage(220);
+      setPower(1500); // 1500W electric space heater
+      setVUnit(VOLTAGE_UNITS[2]);
+      setPUnit(POWER_UNITS[4]);
+    } else if (presetName === 'audio') {
+      setInputVariables(['resistance', 'power']);
+      setResistance(8); // 8Ω standard loudspeaker
+      setPower(50); // 50W amplifier channel
+      setRUnit(RESISTANCE_UNITS[1]);
+      setPUnit(POWER_UNITS[4]);
     }
-  }, [isDarkMode]);
-
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const urlTarget = params.get('target') as TargetParameter;
-      if (urlTarget && ['I', 'U', 'R', 'P'].includes(urlTarget)) {
-        setTarget(urlTarget);
-      }
-      if (params.get('u')) setUValStr(params.get('u')!);
-      if (params.get('uu')) setUUnit(params.get('uu') as VoltageUnit);
-      if (params.get('i')) setIValStr(params.get('i')!);
-      if (params.get('iu')) setIUnit(params.get('iu') as CurrentUnit);
-      if (params.get('r')) setRValStr(params.get('r')!);
-      if (params.get('ru')) setRUnit(params.get('ru') as ResistanceUnit);
-      if (params.get('p')) setPValStr(params.get('p')!);
-      if (params.get('pu')) setPUnit(params.get('pu') as PowerUnit);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
-    } catch {
-      // ignore
-    }
-  }, [history]);
-
-  const uNum = parseFloat(uValStr);
-  const iNum = parseFloat(iValStr);
-  const rNum = parseFloat(rValStr);
-  const pNum = parseFloat(pValStr);
-
-  const calcResult = useMemo(() => {
-    return calculateOhmsLaw({
-      target,
-      uVal: isNaN(uNum) ? 0 : uNum,
-      uUnit,
-      iVal: isNaN(iNum) ? 0 : iNum,
-      iUnit,
-      rVal: isNaN(rNum) ? 0 : rNum,
-      rUnit,
-      pVal: isNaN(pNum) ? 0 : pNum,
-      pUnit,
-      precision,
-    });
-  }, [target, uNum, uUnit, iNum, iUnit, rNum, rUnit, pNum, pUnit, precision]);
-
-  useEffect(() => {
-    if (!calcResult.isValid) return;
-
-    const timer = setTimeout(() => {
-      const inputsStr =
-        target === 'I'
-          ? `U=${calcResult.u_display} ${getUnitSymbol(uUnit)}, R=${calcResult.r_display} ${getUnitSymbol(rUnit)}`
-          : target === 'U'
-          ? `I=${calcResult.i_display} ${getUnitSymbol(iUnit)}, R=${calcResult.r_display} ${getUnitSymbol(rUnit)}`
-          : target === 'R'
-          ? `U=${calcResult.u_display} ${getUnitSymbol(uUnit)}, I=${calcResult.i_display} ${getUnitSymbol(iUnit)}`
-          : `U=${calcResult.u_display} ${getUnitSymbol(uUnit)}, I=${calcResult.i_display} ${getUnitSymbol(iUnit)}`;
-
-      const outputsStr =
-        target === 'I'
-          ? `I = ${formatWithPrecision(calcResult.i_display, precision)} ${getUnitSymbol(iUnit)}, P = ${formatWithPrecision(calcResult.p_display, precision)} ${getUnitSymbol(pUnit)}`
-          : target === 'U'
-          ? `U = ${formatWithPrecision(calcResult.u_display, precision)} ${getUnitSymbol(uUnit)}, P = ${formatWithPrecision(calcResult.p_display, precision)} ${getUnitSymbol(pUnit)}`
-          : target === 'R'
-          ? `R = ${formatWithPrecision(calcResult.r_display, precision)} ${getUnitSymbol(rUnit)}, P = ${formatWithPrecision(calcResult.p_display, precision)} ${getUnitSymbol(pUnit)}`
-          : `P = ${formatWithPrecision(calcResult.p_display, precision)} ${getUnitSymbol(pUnit)}, R = ${formatWithPrecision(calcResult.r_display, precision)} ${getUnitSymbol(rUnit)}`;
-
-      setHistory((prev) => {
-        if (prev.length > 0 && prev[0].inputsStr === inputsStr && prev[0].target === target) {
-          return prev;
-        }
-
-        const newItem: HistoryItem = {
-          id: Date.now().toString(),
-          timestamp: Date.now(),
-          target,
-          inputsStr,
-          outputsStr,
-          u_val: calcResult.u_display,
-          u_unit: uUnit,
-          i_val: calcResult.i_display,
-          i_unit: iUnit,
-          r_val: calcResult.r_display,
-          r_unit: rUnit,
-          p_val: calcResult.p_display,
-          p_unit: pUnit,
-        };
-
-        return [newItem, ...prev.slice(0, 49)];
-      });
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [calcResult, target, uUnit, iUnit, rUnit, pUnit, precision]);
-
-  const shareUrl = useMemo(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('target', target);
-    url.searchParams.set('u', uValStr);
-    url.searchParams.set('uu', uUnit);
-    url.searchParams.set('i', iValStr);
-    url.searchParams.set('iu', iUnit);
-    url.searchParams.set('r', rValStr);
-    url.searchParams.set('ru', rUnit);
-    url.searchParams.set('p', pValStr);
-    url.searchParams.set('pu', pUnit);
-    return url.toString();
-  }, [target, uValStr, uUnit, iValStr, iUnit, rValStr, rUnit, pValStr, pUnit]);
-
-  const handleLoadHistoryItem = (item: HistoryItem) => {
-    setTarget(item.target);
-    setUValStr(item.u_val.toString());
-    setUUnit(item.u_unit);
-    setIValStr(item.i_val.toString());
-    setIUnit(item.i_unit);
-    setRValStr(item.r_val.toString());
-    setRUnit(item.r_unit);
-    setPValStr(item.p_val.toString());
-    setPUnit(item.p_unit);
-    showToast('Loaded calculation parameters.');
   };
 
+  // Reset to default standard state
   const handleReset = () => {
-    setTarget('I');
-    setUValStr('12');
-    setUUnit('V');
-    setIValStr('3');
-    setIUnit('A');
-    setRValStr('4');
-    setRUnit('ohm');
-    setPValStr('36');
-    setPUnit('W');
-    showToast('Reset to default values.');
+    setInputVariables(['voltage', 'resistance']);
+    setVoltage(12);
+    setResistance(240);
+    setCurrent(0.05);
+    setPower(0.6);
   };
 
-  const isInputInvalid = (valStr: string) => {
-    const n = parseFloat(valStr);
-    return isNaN(n) || n <= 0;
-  };
+  const powerSafety = evaluatePowerSafety(solved.power ?? power);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans max-w-full overflow-x-hidden text-sm sm:text-base">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-3 duration-200">
-          <Check className="w-4 h-4 text-emerald-400 dark:text-emerald-600 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="min-h-screen bg-[#0c0f17] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
+      {/* ======================= TOP BAR CONTRACT ======================= */}
+      {/* Strict 1-row, 3-zone contract: [Brand title] — [4-5 nav links] — [1 primary action] */}
+      <header className="sticky top-0 z-40 bg-[#0c0f17]/95 border-b border-slate-800 backdrop-blur-md px-6 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
+          {/* Zone 1: Single text element wordmark */}
+          <a
+            href="/"
+            className="text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0 flex items-center gap-2.5"
+          >
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-sm">
+              Ω
+            </div>
+            <span>{t.appName}</span>
+          </a>
 
-      {/* TOP BAR CONTRACT */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-3.5 flex items-center justify-between gap-3 md:gap-6 max-w-full overflow-hidden">
-        {/* Zone 1: Wordmark */}
-        <a href="/" className="text-base sm:text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 flex items-center gap-2">
-          <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 shrink-0" />
-          <span className="truncate max-w-[140px] sm:max-w-none">{t.appName}</span>
-        </a>
-
-        {/* Zone 2: Nav Links */}
-        <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600 dark:text-slate-300">
-          <button
-            onClick={() => setActiveRelatedTool('none')}
-            className={`hover:text-amber-500 transition-colors whitespace-nowrap shrink-0 ${
-              activeRelatedTool === 'none' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : ''
-            }`}
-          >
-            {t.mainCalcNav}
-          </button>
-          <button
-            onClick={() => setActiveRelatedTool('color-code')}
-            className={`hover:text-amber-500 transition-colors whitespace-nowrap shrink-0 ${
-              activeRelatedTool === 'color-code' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : ''
-            }`}
-          >
-            {t.colorCodeNav}
-          </button>
-          <button
-            onClick={() => setActiveRelatedTool('voltage-divider')}
-            className={`hover:text-amber-500 transition-colors whitespace-nowrap shrink-0 ${
-              activeRelatedTool === 'voltage-divider' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : ''
-            }`}
-          >
-            {t.voltageDividerNav}
-          </button>
-          <button
-            onClick={() => setActiveRelatedTool('power-cost')}
-            className={`hover:text-amber-500 transition-colors whitespace-nowrap shrink-0 ${
-              activeRelatedTool === 'power-cost' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : ''
-            }`}
-          >
-            {t.powerCostNav}
-          </button>
-        </nav>
-
-        {/* Zone 3: Actions + i18n Dropdown */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <div className="relative flex items-center">
-            <Globe className="w-4 h-4 text-slate-500 absolute left-2 pointer-events-none" />
-            <select
-              value={lang}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              className="pl-7 pr-2 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer focus:ring-2 focus:ring-amber-500"
-              aria-label="Select Language"
+          {/* Zone 2: 5 clean single-line nav links */}
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+            <button
+              onClick={() => setActiveTab('core')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 relative py-1 ${
+                activeTab === 'core' ? 'text-cyan-400 font-semibold' : ''
+              }`}
             >
-              {Object.entries(languages).map(([code, info]) => (
-                <option key={code} value={code}>
-                  {info.flag} {info.name}
-                </option>
-              ))}
-            </select>
+              {t.navCore}
+              {activeTab === 'core' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('network')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 relative py-1 ${
+                activeTab === 'network' ? 'text-cyan-400 font-semibold' : ''
+              }`}
+            >
+              {t.navNetwork}
+              {activeTab === 'network' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('decoder')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 relative py-1 ${
+                activeTab === 'decoder' ? 'text-cyan-400 font-semibold' : ''
+              }`}
+            >
+              {t.navDecoder}
+              {activeTab === 'decoder' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('ac')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 relative py-1 ${
+                activeTab === 'ac' ? 'text-cyan-400 font-semibold' : ''
+              }`}
+            >
+              {t.navAC}
+              {activeTab === 'ac' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('tools')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 relative py-1 ${
+                activeTab === 'tools' ? 'text-cyan-400 font-semibold' : ''
+              }`}
+            >
+              {t.navTools}
+              {activeTab === 'tools' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+              )}
+            </button>
+          </nav>
+
+          {/* Zone 3: Actions (Language toggle + Export Report) */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center gap-1.5 transition-colors"
+              title="切换语言 / Switch Language"
+            >
+              <Languages className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{lang === 'zh' ? '中 / EN' : 'EN / 中'}</span>
+            </button>
+            <button
+              onClick={() => setIsReportOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 rounded-lg shadow-sm transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" /> {t.exportReport}
+            </button>
           </div>
-
-          <button
-            onClick={() => setIsPrecisionModalOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 focus:ring-2 focus:ring-amber-500"
-            title={t.precisionBtn}
-          >
-            <Sliders className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="hidden sm:inline">{t.precisionBtn}</span>
-          </button>
-
-          <button
-            onClick={() => setIsShareModalOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1 shadow-xs focus:ring-2 focus:ring-amber-500"
-            title={t.shareBtn}
-          >
-            <Share2 className="w-4 h-4 shrink-0" />
-            <span>{t.shareBtn}</span>
-          </button>
-
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-1.5 sm:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus:ring-2 focus:ring-amber-500"
-            aria-label="Toggle dark mode"
-          >
-            {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
-          </button>
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 md:p-6 flex flex-col gap-6 max-w-full overflow-x-hidden">
-        {/* If a related tool is selected in top nav */}
-        {activeRelatedTool !== 'none' && (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 p-3.5 rounded-xl">
-              <span className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 font-medium">
-                {t.usingToolNotice}
-              </span>
+      {/* Main Content Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-6 space-y-6">
+        {/* Precision & Unit Calibration Ribbon (Directly addresses Shortcoming #3) */}
+        <section className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-xs font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Numerical Precision Engine:
+            </span>
+
+            {/* Precision Mode Tabs */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium">
               <button
-                onClick={() => setActiveRelatedTool('none')}
-                className="px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                onClick={() => setPrecisionMode('sigfigs')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  precisionMode === 'sigfigs' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Significant Figures (有效数字)"
               >
-                {t.backToMainCalc}
+                Significant Figures
+              </button>
+              <button
+                onClick={() => setPrecisionMode('decimals')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  precisionMode === 'decimals' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Fixed Decimal Places (固定小数位数)"
+              >
+                Decimal Places
+              </button>
+              <button
+                onClick={() => setPrecisionMode('scientific')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  precisionMode === 'scientific' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Scientific Exponential Notation (科学记数法 a × 10^b)"
+              >
+                Scientific (10ⁿ)
+              </button>
+              <button
+                onClick={() => setPrecisionMode('engineering')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  precisionMode === 'engineering' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Engineering Notation with SI Metric Prefixes (p, n, μ, m, k, M, G)"
+              >
+                SI Prefixes
               </button>
             </div>
 
-            {activeRelatedTool === 'color-code' && <ResistorColorCode t={t} />}
-            {activeRelatedTool === 'voltage-divider' && <VoltageDivider t={t} />}
-            {activeRelatedTool === 'power-cost' && <PowerCostCalculator t={t} />}
-            {activeRelatedTool === 'led-resistor' && <LedResistorCalculator t={t} />}
+            {/* Precision Digits Slider */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400">
+                {precisionMode === 'sigfigs'
+                  ? 'Digits:'
+                  : precisionMode === 'decimals'
+                  ? 'Decimals:'
+                  : 'Sig Figs:'}
+              </span>
+              <input
+                type="range"
+                min={precisionMode === 'decimals' ? 0 : 1}
+                max={10}
+                value={precisionDigits}
+                onChange={(e) => setPrecisionDigits(parseInt(e.target.value, 10))}
+                className="w-24 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+              />
+              <span className="font-mono text-cyan-400 font-bold w-4 text-center">
+                {precisionDigits}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Presets Menu */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-slate-500 mr-1 hidden sm:inline">Lab Presets:</span>
+            <button
+              onClick={() => applyPreset('led')}
+              className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+            >
+              5V LED
+            </button>
+            <button
+              onClick={() => applyPreset('auto')}
+              className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+            >
+              12V Auto Bulb
+            </button>
+            <button
+              onClick={() => applyPreset('usb')}
+              className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+            >
+              USB 5V/2.4A
+            </button>
+            <button
+              onClick={() => applyPreset('heater')}
+              className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+            >
+              220V Heater
+            </button>
+            <button
+              onClick={() => applyPreset('audio')}
+              className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+            >
+              8Ω Speaker
+            </button>
+            <button
+              onClick={handleReset}
+              className="p-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200"
+              title="Reset parameters to default"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </section>
+
+        {/* Tab 1: Core Ohm's Law Calculator & Real-Time Physical Circuit Visualizer */}
+        {activeTab === 'core' && (
+          <div className="space-y-6">
+            {/* 4 Interactive Variable Parameter Cards (V, I, R, P) */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Variable 1: Voltage (V) */}
+              <div
+                className={`rounded-xl p-4 transition-all border ${
+                  isVInput
+                    ? 'bg-slate-900 border-amber-500/50 shadow-lg shadow-amber-500/5'
+                    : 'bg-slate-950/70 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-amber-400">V</span>
+                    <span className="text-xs text-slate-300 font-medium">Voltage (Potential)</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleInput('voltage')}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold transition-colors ${
+                      isVInput
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {isVInput ? 'INPUT [LOCK]' : 'CALCULATED'}
+                  </button>
+                </div>
+
+                {/* Input or Solved Value */}
+                <div className="flex items-center gap-2 mb-3">
+                  {isVInput ? (
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.000000001"
+                      value={voltage / vUnit.multiplier}
+                      onChange={(e) => {
+                        const parsed = parseFloat(e.target.value) || 0;
+                        setVoltage(parsed * vUnit.multiplier);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-slate-100 focus:outline-none focus:border-amber-500"
+                    />
+                  ) : (
+                    <div className="w-full bg-slate-900/60 border border-slate-800/80 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-amber-300 tabular-nums">
+                      {formatValueWithPrecision(
+                        (solved.voltage ?? voltage) / vUnit.multiplier,
+                        precisionMode,
+                        precisionDigits
+                      )}
+                    </div>
+                  )}
+
+                  {/* Unit Selector */}
+                  <select
+                    value={vUnit.symbol}
+                    onChange={(e) => {
+                      const found = VOLTAGE_UNITS.find((u) => u.symbol === e.target.value);
+                      if (found) setVUnit(found);
+                    }}
+                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-2 font-mono focus:outline-none focus:border-amber-500"
+                  >
+                    {VOLTAGE_UNITS.map((u) => (
+                      <option key={u.symbol} value={u.symbol}>
+                        {u.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Fine scrub slider for input */}
+                {isVInput && (
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                    value={Math.min(100, Math.max(0.1, voltage / vUnit.multiplier))}
+                    onChange={(e) => setVoltage(parseFloat(e.target.value) * vUnit.multiplier)}
+                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                )}
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  Base SI: {(solved.voltage ?? voltage).toExponential(3)} V
+                </div>
+              </div>
+
+              {/* Variable 2: Current (I) */}
+              <div
+                className={`rounded-xl p-4 transition-all border ${
+                  isIInput
+                    ? 'bg-slate-900 border-cyan-500/50 shadow-lg shadow-cyan-500/5'
+                    : 'bg-slate-950/70 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-cyan-400">I</span>
+                    <span className="text-xs text-slate-300 font-medium">Current (Intensity)</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleInput('current')}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold transition-colors ${
+                      isIInput
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {isIInput ? 'INPUT [LOCK]' : 'CALCULATED'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  {isIInput ? (
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.000000000001"
+                      value={current / iUnit.multiplier}
+                      onChange={(e) => {
+                        const parsed = parseFloat(e.target.value) || 0;
+                        setCurrent(parsed * iUnit.multiplier);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-slate-100 focus:outline-none focus:border-cyan-500"
+                    />
+                  ) : (
+                    <div className="w-full bg-slate-900/60 border border-slate-800/80 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-cyan-300 tabular-nums">
+                      {formatValueWithPrecision(
+                        (solved.current ?? current) / iUnit.multiplier,
+                        precisionMode,
+                        precisionDigits
+                      )}
+                    </div>
+                  )}
+
+                  <select
+                    value={iUnit.symbol}
+                    onChange={(e) => {
+                      const found = CURRENT_UNITS.find((u) => u.symbol === e.target.value);
+                      if (found) setIUnit(found);
+                    }}
+                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-2 font-mono focus:outline-none focus:border-cyan-500"
+                  >
+                    {CURRENT_UNITS.map((u) => (
+                      <option key={u.symbol} value={u.symbol}>
+                        {u.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {isIInput && (
+                  <input
+                    type="range"
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={Math.min(1000, Math.max(0.01, current / iUnit.multiplier))}
+                    onChange={(e) => setCurrent(parseFloat(e.target.value) * iUnit.multiplier)}
+                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                  />
+                )}
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  Base SI: {(solved.current ?? current).toExponential(3)} A
+                </div>
+              </div>
+
+              {/* Variable 3: Resistance (R) */}
+              <div
+                className={`rounded-xl p-4 transition-all border ${
+                  isRInput
+                    ? 'bg-slate-900 border-sky-500/50 shadow-lg shadow-sky-500/5'
+                    : 'bg-slate-950/70 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-sky-400">R</span>
+                    <span className="text-xs text-slate-300 font-medium">Resistance (Load)</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleInput('resistance')}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold transition-colors ${
+                      isRInput
+                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {isRInput ? 'INPUT [LOCK]' : 'CALCULATED'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  {isRInput ? (
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.001"
+                      value={resistance / rUnit.multiplier}
+                      onChange={(e) => {
+                        const parsed = parseFloat(e.target.value) || 0;
+                        setResistance(parsed * rUnit.multiplier);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-slate-100 focus:outline-none focus:border-sky-500"
+                    />
+                  ) : (
+                    <div className="w-full bg-slate-900/60 border border-slate-800/80 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-sky-300 tabular-nums">
+                      {formatValueWithPrecision(
+                        (solved.resistance ?? resistance) / rUnit.multiplier,
+                        precisionMode,
+                        precisionDigits
+                      )}
+                    </div>
+                  )}
+
+                  <select
+                    value={rUnit.symbol}
+                    onChange={(e) => {
+                      const found = RESISTANCE_UNITS.find((u) => u.symbol === e.target.value);
+                      if (found) setRUnit(found);
+                    }}
+                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-2 font-mono focus:outline-none focus:border-sky-500"
+                  >
+                    {RESISTANCE_UNITS.map((u) => (
+                      <option key={u.symbol} value={u.symbol}>
+                        {u.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {isRInput && (
+                  <input
+                    type="range"
+                    min="1"
+                    max="10000"
+                    step="1"
+                    value={Math.min(10000, Math.max(1, resistance / rUnit.multiplier))}
+                    onChange={(e) => setResistance(parseFloat(e.target.value) * rUnit.multiplier)}
+                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                  />
+                )}
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  Base SI: {(solved.resistance ?? resistance).toExponential(3)} Ω
+                </div>
+              </div>
+
+              {/* Variable 4: Power (P) */}
+              <div
+                className={`rounded-xl p-4 transition-all border ${
+                  isPInput
+                    ? 'bg-slate-900 border-purple-500/50 shadow-lg shadow-purple-500/5'
+                    : 'bg-slate-950/70 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-purple-400">P</span>
+                    <span className="text-xs text-slate-300 font-medium">Power (Dissipation)</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleInput('power')}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold transition-colors ${
+                      isPInput
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {isPInput ? 'INPUT [LOCK]' : 'CALCULATED'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  {isPInput ? (
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.000000001"
+                      value={power / pUnit.multiplier}
+                      onChange={(e) => {
+                        const parsed = parseFloat(e.target.value) || 0;
+                        setPower(parsed * pUnit.multiplier);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-slate-100 focus:outline-none focus:border-purple-500"
+                    />
+                  ) : (
+                    <div className="w-full bg-slate-900/60 border border-slate-800/80 rounded-lg px-3 py-1.5 text-lg font-mono font-bold text-purple-300 tabular-nums">
+                      {formatValueWithPrecision(
+                        (solved.power ?? power) / pUnit.multiplier,
+                        precisionMode,
+                        precisionDigits
+                      )}
+                    </div>
+                  )}
+
+                  <select
+                    value={pUnit.symbol}
+                    onChange={(e) => {
+                      const found = POWER_UNITS.find((u) => u.symbol === e.target.value);
+                      if (found) setPUnit(found);
+                    }}
+                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-2 font-mono focus:outline-none focus:border-purple-500"
+                  >
+                    {POWER_UNITS.map((u) => (
+                      <option key={u.symbol} value={u.symbol}>
+                        {u.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {isPInput && (
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1000"
+                    step="0.1"
+                    value={Math.min(1000, Math.max(0.1, power / pUnit.multiplier))}
+                    onChange={(e) => setPower(parseFloat(e.target.value) * pUnit.multiplier)}
+                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  />
+                )}
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  Base SI: {(solved.power ?? power).toExponential(3)} W
+                </div>
+              </div>
+            </section>
+
+            {/* Split Console: Interactive Schematic Visualizer (Left) + Ohm's Law Wheel & Steps (Right) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Interactive Circuit Schematic (Directly solves Shortcoming #1) */}
+              <div className="lg:col-span-7 space-y-6">
+                <CircuitVisualizer
+                  voltage={solved.voltage ?? voltage}
+                  current={solved.current ?? current}
+                  resistance={solved.resistance ?? resistance}
+                  power={solved.power ?? power}
+                  precisionMode={precisionMode}
+                  precisionDigits={precisionDigits}
+                />
+
+                {/* Step-by-Step Derivation Breakdown */}
+                <DerivationPanel
+                  derivations={derivations}
+                  precisionMode={precisionMode}
+                  precisionDigits={precisionDigits}
+                />
+              </div>
+
+              {/* Right Column: Interactive Ohm's Law Wheel */}
+              <div className="lg:col-span-5 space-y-6">
+                <OhmsWheel
+                  activeFormulas={activeFormulas}
+                  onSelectTarget={(target) => handleToggleInput(target)}
+                />
+
+                {/* Thermal & Physical Specifications Card */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-xl space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" /> Component Thermal & Safety Analysis
+                  </h4>
+                  <div className="space-y-2 text-xs text-slate-300">
+                    <div className="flex justify-between p-2 bg-slate-950/70 rounded border border-slate-800">
+                      <span className="text-slate-400">Power Rating Required:</span>
+                      <span className="font-mono font-bold text-slate-100">{powerSafety.rating}</span>
+                    </div>
+                    <div className="flex justify-between p-2 bg-slate-950/70 rounded border border-slate-800">
+                      <span className="text-slate-400">Recommended Physical Package:</span>
+                      <span className="font-mono text-cyan-300">{powerSafety.recommendedPackage}</span>
+                    </div>
+                    {powerSafety.warning && (
+                      <div className="p-2.5 bg-rose-950/30 border border-rose-500/40 rounded text-rose-300 text-xs leading-relaxed">
+                        ⚠️ {powerSafety.warning}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* MAIN CALCULATOR DASHBOARD */}
-        {activeRelatedTool === 'none' && (
-          <div className="flex flex-col gap-6 max-w-full overflow-x-hidden">
-            {/* Target Parameter Selector Bar */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  {t.targetLabel}
-                </span>
-                <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
-                  {t.targetSub}
-                </span>
-              </div>
+        {/* Tab 2: Multi-Component Network Designer (Series, Parallel, Voltage Divider) */}
+        {activeTab === 'network' && (
+          <NetworkSchematic
+            precisionMode={precisionMode}
+            precisionDigits={precisionDigits}
+          />
+        )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full md:w-auto">
-                <button
-                  onClick={() => setTarget('I')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                    target === 'I'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="font-mono">{t.current}</span>
-                </button>
+        {/* Tab 3: Resistor Color Code & E-Series Matcher */}
+        {activeTab === 'decoder' && (
+          <ResistorDecoder
+            currentResistance={solved.resistance ?? resistance}
+            onApplyResistance={(r) => {
+              setResistance(r);
+              if (!isRInput) {
+                handleToggleInput('resistance');
+              }
+              setActiveTab('core');
+            }}
+            precisionMode={precisionMode}
+            precisionDigits={precisionDigits}
+          />
+        )}
 
-                <button
-                  onClick={() => setTarget('U')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                    target === 'U'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="font-mono">{t.voltage}</span>
-                </button>
+        {/* Tab 4: AC Impedance & Phasor Inspector */}
+        {activeTab === 'ac' && (
+          <ACInspector
+            precisionMode={precisionMode}
+            precisionDigits={precisionDigits}
+          />
+        )}
 
-                <button
-                  onClick={() => setTarget('R')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                    target === 'R'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="font-mono">{t.resistance}</span>
-                </button>
-
-                <button
-                  onClick={() => setTarget('P')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                    target === 'P'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="font-mono">{t.power}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Error Banner when non-positive input occurs */}
-            {!calcResult.isValid && (
-              <div className="bg-rose-50 dark:bg-rose-950/80 border-2 border-rose-400 dark:border-rose-800 rounded-xl p-4 flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
-                <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-                <div className="flex flex-col gap-1">
-                  <h4 className="text-sm font-bold text-rose-900 dark:text-rose-200">
-                    {calcResult.errorMessage || t.invalidErrorTitle}
-                  </h4>
-                  <p className="text-xs sm:text-sm text-rose-700 dark:text-rose-300">
-                    {t.invalidErrorDesc}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* CORE 2-COLUMN HERO SPLIT: Left Input Parameters, Right Circuit Diagram */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* LEFT COLUMN: Input Panel + Optional Expression Parser Toggle */}
-              <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col gap-4 max-w-full">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <span>{t.inputSectionTitle}</span>
-                  </h3>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowExpressionParser(!showExpressionParser)}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 ${
-                        showExpressionParser
-                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                      }`}
-                      title={t.parserTitle}
-                    >
-                      <Calculator className="w-3.5 h-3.5 shrink-0" />
-                      <span>{showExpressionParser ? '隐藏算式' : '算式输入'}</span>
-                    </button>
-
-                    <button
-                      onClick={handleReset}
-                      className="p-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 font-semibold"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>{t.resetBtn}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Optional Free-text Expression Parser Panel inside Left Column */}
-                {showExpressionParser && (
-                  <div className="pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <FormulaExpressionParser
-                      t={t}
-                      onApplyParsedValues={(p) => {
-                        if (p.target) setTarget(p.target);
-                        if (p.uVal !== undefined) setUValStr(p.uVal.toString());
-                        if (p.uUnit) setUUnit(p.uUnit);
-                        if (p.iVal !== undefined) setIValStr(p.iVal.toString());
-                        if (p.iUnit) setIUnit(p.iUnit);
-                        if (p.rVal !== undefined) setRValStr(p.rVal.toString());
-                        if (p.rUnit) setRUnit(p.rUnit);
-                        showToast('Synced expression values.');
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* Voltage Input (U) */}
-                <div className={`flex flex-col gap-1.5 p-3.5 rounded-lg transition-colors ${
-                  target === 'U' ? 'bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60' : 'bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
-                    <label className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
-                      <span>{t.voltageLabel}</span>
-                    </label>
-
-                    <span className="text-xs text-slate-500 font-mono">
-                      {t.siEquivalent}: {toSI(uNum || 0, VOLTAGE_UNITS[uUnit].multiplier)} V
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={target === 'U'}
-                      value={target === 'U' && calcResult.isValid ? formatWithPrecision(calcResult.u_display, precision) : uValStr}
-                      onChange={(e) => setUValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm sm:text-base font-mono transition-colors min-w-0 ${
-                        target === 'U'
-                          ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
-                          : isInputInvalid(uValStr)
-                          ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-900 dark:text-rose-200'
-                          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500'
-                      }`}
-                      placeholder="12"
-                    />
-
-                    <select
-                      value={uUnit}
-                      onChange={(e) => setUUnit(e.target.value as VoltageUnit)}
-                      className="p-2.5 rounded-lg text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
-                    >
-                      {Object.values(VOLTAGE_UNITS).map((u) => (
-                        <option key={u.symbol} value={u.symbol}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Current Input (I) */}
-                <div className={`flex flex-col gap-1.5 p-3.5 rounded-lg transition-colors ${
-                  target === 'I' ? 'bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60' : 'bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
-                    <label className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                      <span>{t.currentLabel}</span>
-                    </label>
-
-                    <span className="text-xs text-slate-500 font-mono">
-                      {t.siEquivalent}: {toSI(iNum || 0, CURRENT_UNITS[iUnit].multiplier)} A
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={target === 'I'}
-                      value={target === 'I' && calcResult.isValid ? formatWithPrecision(calcResult.i_display, precision) : iValStr}
-                      onChange={(e) => setIValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm sm:text-base font-mono transition-colors min-w-0 ${
-                        target === 'I'
-                          ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
-                          : isInputInvalid(iValStr)
-                          ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-900 dark:text-rose-200'
-                          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500'
-                      }`}
-                      placeholder="3"
-                    />
-
-                    <select
-                      value={iUnit}
-                      onChange={(e) => setIUnit(e.target.value as CurrentUnit)}
-                      className="p-2.5 rounded-lg text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
-                    >
-                      {Object.values(CURRENT_UNITS).map((u) => (
-                        <option key={u.symbol} value={u.symbol}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Resistance Input (R) */}
-                <div className={`flex flex-col gap-1.5 p-3.5 rounded-lg transition-colors ${
-                  target === 'R' ? 'bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60' : 'bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
-                    <label className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                      <span>{t.resistanceLabel}</span>
-                    </label>
-
-                    <span className="text-xs text-slate-500 font-mono">
-                      {t.siEquivalent}: {toSI(rNum || 0, RESISTANCE_UNITS[rUnit].multiplier)} Ω
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={target === 'R'}
-                      value={target === 'R' && calcResult.isValid ? formatWithPrecision(calcResult.r_display, precision) : rValStr}
-                      onChange={(e) => setRValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm sm:text-base font-mono transition-colors min-w-0 ${
-                        target === 'R'
-                          ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
-                          : isInputInvalid(rValStr)
-                          ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-900 dark:text-rose-200'
-                          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500'
-                      }`}
-                      placeholder="4"
-                    />
-
-                    <select
-                      value={rUnit}
-                      onChange={(e) => setRUnit(e.target.value as ResistanceUnit)}
-                      className="p-2.5 rounded-lg text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
-                    >
-                      {Object.values(RESISTANCE_UNITS).map((u) => (
-                        <option key={u.symbol} value={u.symbol}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Power Output / Input (P) */}
-                <div className={`flex flex-col gap-1.5 p-3.5 rounded-lg transition-colors ${
-                  target === 'P' ? 'bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60' : 'bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
-                    <label className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-pink-500"></span>
-                      <span>{t.powerLabel}</span>
-                    </label>
-
-                    <span className="text-xs text-slate-500 font-mono">
-                      {t.siEquivalent}: {calcResult.isValid ? calcResult.p_watts : 0} W
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={target === 'P'}
-                      value={target === 'P' && calcResult.isValid ? formatWithPrecision(calcResult.p_display, precision) : calcResult.isValid ? formatWithPrecision(calcResult.p_display, precision) : pValStr}
-                      onChange={(e) => setPValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm sm:text-base font-mono transition-colors min-w-0 ${
-                        target === 'P'
-                          ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
-                          : 'bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                      }`}
-                      placeholder="Auto"
-                    />
-
-                    <select
-                      value={pUnit}
-                      onChange={(e) => setPUnit(e.target.value as PowerUnit)}
-                      className="p-2.5 rounded-lg text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
-                    >
-                      {Object.values(POWER_UNITS).map((u) => (
-                        <option key={u.symbol} value={u.symbol}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Interactive Circuit Diagram */}
-              <div className="lg:col-span-7 flex flex-col gap-6 max-w-full">
-                <CircuitDiagram result={calcResult} precision={precision} t={t} />
-              </div>
-            </div>
-
-            {/* SECONDARY ANALYSIS SPLIT: Steps Breakdown & Reverse Verification */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SolutionSteps result={calcResult} t={t} />
-              <ReverseVerification result={calcResult} precision={precision} t={t} />
-            </div>
-
-            {/* COLLAPSIBLE / TOGGLEABLE FORMULA WHEEL CARD */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <PieChart className="w-5 h-5 text-amber-500 shrink-0" />
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                    {t.formulaWheelTitle}
-                  </h3>
-                </div>
-
-                <button
-                  onClick={() => setShowFormulaWheel(!showFormulaWheel)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  {showFormulaWheel ? '收起轮盘' : '展开轮盘'}
-                </button>
-              </div>
-
-              {showFormulaWheel && (
-                <FormulaWheel onSelectTarget={(newTarget) => setTarget(newTarget)} t={t} />
-              )}
-            </div>
-
-            {/* HISTORY PANEL */}
-            <HistoryPanel
-              history={history}
-              onLoadItem={handleLoadHistoryItem}
-              onDeleteItem={(id) => setHistory((prev) => prev.filter((h) => h.id !== id))}
-              onClearAll={() => {
-                setHistory([]);
-                showToast('Cleared history.');
-              }}
-              t={t}
-            />
-
-            {/* 4 RELATED ENGINEERING TOOLS */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
-                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>{t.relatedToolsTitle}</span>
-                </h3>
-                <span className="text-xs text-slate-500">{t.relatedToolsSub}</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                <button
-                  onClick={() => setActiveRelatedTool('color-code')}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-700 transition-all text-left flex flex-col gap-2 group"
-                >
-                  <Disc className="w-6 h-6 text-amber-500 group-hover:scale-110 transition-transform shrink-0" />
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">{t.colorCodeTitle}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.colorCodeDesc}</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveRelatedTool('voltage-divider')}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-700 transition-all text-left flex flex-col gap-2 group"
-                >
-                  <GitFork className="w-6 h-6 text-indigo-500 group-hover:scale-110 transition-transform shrink-0" />
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">{t.voltageDividerTitle}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.voltageDividerDesc}</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveRelatedTool('power-cost')}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-700 transition-all text-left flex flex-col gap-2 group"
-                >
-                  <DollarSign className="w-6 h-6 text-emerald-500 group-hover:scale-110 transition-transform shrink-0" />
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">{t.powerCostTitle}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.powerCostDesc}</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveRelatedTool('led-resistor')}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 hover:border-pink-400 dark:hover:border-pink-700 transition-all text-left flex flex-col gap-2 group"
-                >
-                  <Lightbulb className="w-6 h-6 text-pink-500 group-hover:scale-110 transition-transform shrink-0" />
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">{t.ledResistorTitle}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.ledResistorDesc}</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Tab 5: Practical Engineering Tools (LED & Power Cost) */}
+        {activeTab === 'tools' && (
+          <PracticalTools lang={lang} />
         )}
       </main>
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-6 px-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-auto">
-        <p>{t.footerText}</p>
-      </footer>
-
-      {/* MODALS */}
-      <PrecisionSettingsModal
-        isOpen={isPrecisionModalOpen}
-        onClose={() => setIsPrecisionModalOpen(false)}
-        config={precision}
-        onChange={(newConfig) => {
-          setPrecision(newConfig);
-          showToast('Updated precision settings.');
+      {/* Export / Printable Lab Report Modal */}
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        circuitState={{
+          voltage: solved.voltage ?? voltage,
+          current: solved.current ?? current,
+          resistance: solved.resistance ?? resistance,
+          power: solved.power ?? power,
         }}
-        t={t}
+        activeFormulas={activeFormulas}
+        derivations={derivations}
+        precisionMode={precisionMode}
+        precisionDigits={precisionDigits}
       />
 
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        shareUrl={shareUrl}
-        t={t}
-      />
+      {/* Clean Scientific Footer */}
+      <footer className="mt-auto border-t border-slate-800/80 bg-slate-950/60 py-6 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span>OhmLab Precision Studio</span>
+            <span aria-hidden="true">·</span>
+            <span>Based on IEC 60062 / EIA-RS-279 Standards</span>
+            <span aria-hidden="true">·</span>
+            <span>V = I · R & P = V · I</span>
+          </div>
+          <div>High-precision engineering circuit laboratory</div>
+        </div>
+      </footer>
     </div>
   );
 }
