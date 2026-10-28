@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
+import { TranslationSchema } from '../i18n/translations';
 import { Share2, Copy, Check, X } from 'lucide-react';
 
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   shareUrl: string;
+  t: TranslationSchema;
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({
   isOpen,
   onClose,
   shareUrl,
+  t,
 }) => {
-
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -28,9 +30,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-amber-500" />
+            <Share2 className="w-5 h-5 text-amber-500 shrink-0" />
             <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              分享当前计算参数链接 (Share Calculator State)
+              {t.shareTitle}
             </h3>
           </div>
           <button
@@ -41,8 +43,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </button>
         </div>
 
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          该链接已将您当前的输入数值、单位及精度模式编码至 URL 参数中。同事点击此链接后可直接恢复完全一致的物理计算上下文。
+        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+          {t.shareDesc}
         </p>
 
         <div className="flex items-center gap-2">
@@ -54,17 +56,17 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           />
           <button
             onClick={handleCopy}
-            className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors shrink-0 flex items-center gap-1.5"
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors shrink-0 flex items-center gap-1.5"
           >
             {copied ? (
               <>
                 <Check className="w-4 h-4" />
-                <span>已复制</span>
+                <span>{t.copiedLinkBtn}</span>
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4" />
-                <span>复制链接</span>
+                <span>{t.copyLinkBtn}</span>
               </>
             )}
           </button>

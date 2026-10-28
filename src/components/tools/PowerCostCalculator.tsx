@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Zap, DollarSign, AlertCircle } from 'lucide-react';
+import { TranslationSchema } from '../../i18n/translations';
+import { DollarSign, AlertCircle } from 'lucide-react';
 
-export const PowerCostCalculator: React.FC = () => {
-  const [powerInput, setPowerInput] = useState<string>('1000'); // 1000 W
+interface PowerCostCalculatorProps {
+  t: TranslationSchema;
+}
+
+export const PowerCostCalculator: React.FC<PowerCostCalculatorProps> = ({ t }) => {
+  const [powerInput, setPowerInput] = useState<string>('1000');
   const [powerUnit, setPowerUnit] = useState<'W' | 'kW'>('W');
   const [hoursPerDay, setHoursPerDay] = useState<string>('8');
-  const [costPerKwh, setCostPerKwh] = useState<string>('0.6'); // 0.6元/kWh
+  const [costPerKwh, setCostPerKwh] = useState<string>('0.6');
 
   const powerNum = parseFloat(powerInput);
   const hoursNum = parseFloat(hoursPerDay);
@@ -37,16 +42,16 @@ export const PowerCostCalculator: React.FC = () => {
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col gap-4">
       <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-        <DollarSign className="w-5 h-5 text-emerald-500" />
+        <DollarSign className="w-5 h-5 text-emerald-500 shrink-0" />
         <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-          用电功率与电费评估计算器 (Power & Energy Cost Calculator)
+          {t.powerCostTitle}
         </h3>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
         <div>
           <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            用电设备功率 (P)
+            {t.appliancePowerLabel}
           </label>
           <div className="flex gap-1">
             <input
@@ -58,17 +63,17 @@ export const PowerCostCalculator: React.FC = () => {
             <select
               value={powerUnit}
               onChange={(e) => setPowerUnit(e.target.value as 'W' | 'kW')}
-              className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-semibold"
+              className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold"
             >
-              <option value="W">瓦 (W)</option>
-              <option value="kW">千瓦 (kW)</option>
+              <option value="W">W</option>
+              <option value="kW">kW</option>
             </select>
           </div>
         </div>
 
         <div>
           <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            每日运行时间 (小时/天)
+            {t.dailyHoursLabel}
           </label>
           <input
             type="number"
@@ -82,7 +87,7 @@ export const PowerCostCalculator: React.FC = () => {
 
         <div>
           <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            电价单价 (元 / kWh 度)
+            {t.tariffLabel}
           </label>
           <input
             type="number"
@@ -96,35 +101,35 @@ export const PowerCostCalculator: React.FC = () => {
       {!isValid ? (
         <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-lg text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>参数无效：功率需大于0，每日运行时间在 0~24 小时之间。</span>
+          <span>{t.invalidErrorDesc}</span>
         </div>
       ) : (
         <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/60 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
           <div>
-            <span className="text-xs text-slate-500 font-medium block">每日耗电量</span>
+            <span className="text-xs text-slate-500 font-semibold block">{t.dailyKwh}</span>
             <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              {dailyKwh.toFixed(2)} 度 (kWh)
+              {dailyKwh.toFixed(2)} kWh
             </span>
           </div>
 
           <div>
-            <span className="text-xs text-slate-500 font-medium block">每月耗电量 (30天)</span>
+            <span className="text-xs text-slate-500 font-semibold block">{t.monthlyKwh}</span>
             <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              {monthlyKwh.toFixed(1)} 度 (kWh)
+              {monthlyKwh.toFixed(1)} kWh
             </span>
           </div>
 
           <div>
-            <span className="text-xs text-slate-500 font-medium block">预估预估日电费</span>
+            <span className="text-xs text-slate-500 font-semibold block">{t.dailyCost}</span>
             <span className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">
-              ¥ {dailyCost.toFixed(2)}
+              ${dailyCost.toFixed(2)}
             </span>
           </div>
 
           <div>
-            <span className="text-xs text-slate-500 font-medium block">预估月电费</span>
+            <span className="text-xs text-slate-500 font-semibold block">{t.monthlyCost}</span>
             <span className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">
-              ¥ {monthlyCost.toFixed(2)}
+              ${monthlyCost.toFixed(2)}
             </span>
           </div>
         </div>

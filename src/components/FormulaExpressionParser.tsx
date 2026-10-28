@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TargetParameter, VoltageUnit, CurrentUnit, ResistanceUnit } from '../types/ohms';
-import { Calculator, Sparkles, ArrowDownLeft, Check, AlertCircle } from 'lucide-react';
+import { TranslationSchema } from '../i18n/translations';
+import { Calculator, Sparkles, ArrowDownLeft, AlertCircle } from 'lucide-react';
 
 interface FormulaExpressionParserProps {
   onApplyParsedValues: (params: {
@@ -12,17 +13,19 @@ interface FormulaExpressionParserProps {
     rVal?: number;
     rUnit?: ResistanceUnit;
   }) => void;
+  t: TranslationSchema;
 }
 
 const PRESET_EXPRESSIONS = [
-  { label: '12V 电源供 400mΩ 电阻求电流', expr: '12V / 0.4ohm', target: 'I' as TargetParameter },
-  { label: '220V 电流 5A 求发热电阻', expr: '220V / 5A', target: 'R' as TargetParameter },
-  { label: '5V 电源给 20mA LED 供电求限流', expr: '(5V - 2.1V) / 20mA', target: 'R' as TargetParameter },
-  { label: '100W 功率在 50Ω 上求解电压', expr: 'sqrt(100W * 50ohm)', target: 'U' as TargetParameter },
+  { label: '12V / 0.4ohm', expr: '12V / 0.4ohm', target: 'I' as TargetParameter },
+  { label: '220V / 5A', expr: '220V / 5A', target: 'R' as TargetParameter },
+  { label: '(5V - 2.1V) / 20mA', expr: '(5V - 2.1V) / 20mA', target: 'R' as TargetParameter },
+  { label: 'sqrt(100W * 50ohm)', expr: 'sqrt(100W * 50ohm)', target: 'U' as TargetParameter },
 ];
 
 export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = ({
   onApplyParsedValues,
+  t,
 }) => {
   const [expression, setExpression] = useState<string>('12V / 0.4ohm');
   const [parsedResult, setParsedResult] = useState<{
@@ -41,12 +44,11 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
   const handleParseExpression = (textToParse: string) => {
     setExpression(textToParse);
     if (!textToParse.trim()) {
-      setParsedResult({ isValid: false, message: '请输入任意电学算式表达式' });
+      setParsedResult({ isValid: false, message: t.parserError });
       return;
     }
 
     try {
-      // Basic parser converting engineering unit tags to raw SI multipliers
       let sanitized = textToParse
         .replace(/(\d+(?:\.\d+)?)\s*uV/gi, '($1*1e-6)')
         .replace(/(\d+(?:\.\d+)?)\s*mV/gi, '($1*1e-3)')
@@ -70,7 +72,6 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
         .replace(/\^/g, '**')
         .replace(/sqrt\(/gi, 'Math.sqrt(');
 
-      // Detect potential target unit
       let inferredTarget: TargetParameter = 'I';
       let inferredUnit = '';
 
@@ -88,7 +89,6 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
         inferredUnit = 'V';
       }
 
-      // Safe Function evaluation
       const evaluated = new Function(`return (${sanitized});`)();
 
       if (typeof evaluated === 'number' && !isNaN(evaluated) && isFinite(evaluated)) {
@@ -101,13 +101,13 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
       } else {
         setParsedResult({
           isValid: false,
-          message: '算式语法错误或存在非法运算符',
+          message: t.parserError,
         });
       }
     } catch {
       setParsedResult({
         isValid: false,
-        message: '解析失败，请检查表达式格式（支持 + - * / ^ sqrt 与 V, A, Ω, W 单位）',
+        message: t.parserError,
       });
     }
   };
@@ -138,22 +138,22 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col gap-4 max-w-full overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-indigo-500" />
+          <Calculator className="w-5 h-5 text-indigo-500 shrink-0" />
           <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            算式与电学公式自由解析输入框 (Expression & Formula Parser)
+            {t.parserTitle}
           </h3>
         </div>
-        <span className="text-xs text-slate-500 font-medium">支持单位带入与自然数学表达</span>
+        <span className="text-xs text-slate-500 font-medium">{t.parserSub}</span>
       </div>
 
       <div className="flex flex-col gap-3">
         {/* Preset tags */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-          <span className="text-xs text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            预置快捷算式:
+          <span className="text-xs text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1 font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            {t.presetLabel}
           </span>
           {PRESET_EXPRESSIONS.map((preset, idx) => (
             <button
@@ -161,7 +161,7 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
               onClick={() => handleParseExpression(preset.expr)}
               className="px-2.5 py-1 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-950 text-slate-700 dark:text-slate-300 transition-colors whitespace-nowrap shrink-0 border border-slate-200/60 dark:border-slate-700 font-mono"
             >
-              {preset.expr}
+              {preset.label}
             </button>
           ))}
         </div>
@@ -173,7 +173,7 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
             value={expression}
             onChange={(e) => handleParseExpression(e.target.value)}
             className="flex-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
-            placeholder="例如: 12V / 400mΩ 或 sqrt(100W * 50ohm)"
+            placeholder={t.parserPlaceholder}
           />
 
           <button
@@ -181,8 +181,8 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
             disabled={!parsedResult.isValid}
             className="px-4 py-3 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition-colors flex items-center justify-center gap-1.5 shrink-0"
           >
-            <ArrowDownLeft className="w-4 h-4" />
-            <span>同步载入到主计算器</span>
+            <ArrowDownLeft className="w-4 h-4 shrink-0" />
+            <span>{t.syncToCalcBtn}</span>
           </button>
         </div>
 
@@ -191,7 +191,7 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
           <div className="p-3.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-indigo-700 dark:text-indigo-300">
-                算式求值结果:
+                {t.parsedResultLabel}
               </span>
               <span className="font-bold font-mono text-base text-indigo-900 dark:text-indigo-200">
                 {parsedResult.val} {parsedResult.unit}
@@ -199,7 +199,7 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
             </div>
 
             <span className="text-[11px] text-indigo-600/80 dark:text-indigo-400 font-mono">
-              推导目标: [{parsedResult.target}]
+              Target: [{parsedResult.target}]
             </span>
           </div>
         ) : (
