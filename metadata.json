@@ -1,0 +1,6 @@
+{
+  "name": "欧姆定律全能计算器",
+  "description": "专业级欧姆定律与电学计算工具，集成电路图动态可视化、分步公式推导、高精度单位换算、反算自洽校验、计算历史导出及色环分压等扩展电学工具。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
