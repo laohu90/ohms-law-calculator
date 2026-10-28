@@ -149,9 +149,9 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
       </div>
 
       <div className="flex flex-col gap-3">
-        {/* Preset tags */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-          <span className="text-xs text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1 font-semibold">
+        {/* Preset tags with flex-wrap for narrow mobile screens */}
+        <div className="flex flex-wrap items-center gap-1.5 max-w-full">
+          <span className="text-xs text-slate-500 shrink-0 flex items-center gap-1 font-semibold">
             <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             {t.presetLabel}
           </span>
@@ -159,7 +159,7 @@ export const FormulaExpressionParser: React.FC<FormulaExpressionParserProps> = (
             <button
               key={idx}
               onClick={() => handleParseExpression(preset.expr)}
-              className="px-2.5 py-1 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-950 text-slate-700 dark:text-slate-300 transition-colors whitespace-nowrap shrink-0 border border-slate-200/60 dark:border-slate-700 font-mono"
+              className="px-2.5 py-1 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-950 text-slate-700 dark:text-slate-300 transition-colors whitespace-nowrap border border-slate-200/60 dark:border-slate-700 font-mono cursor-pointer"
             >
               {preset.label}
             </button>
