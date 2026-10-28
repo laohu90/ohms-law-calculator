@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TargetParameter,
   VoltageUnit,
@@ -25,6 +25,8 @@ import { ReverseVerification } from './components/ReverseVerification';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PrecisionSettingsModal } from './components/PrecisionSettingsModal';
 import { ShareModal } from './components/ShareModal';
+import { FormulaWheel } from './components/FormulaWheel';
+import { FormulaExpressionParser } from './components/FormulaExpressionParser';
 
 // Related tools
 import { ResistorColorCode } from './components/tools/ResistorColorCode';
@@ -45,8 +47,6 @@ import {
   DollarSign,
   Lightbulb,
   Check,
-  Copy,
-  HelpCircle,
 } from 'lucide-react';
 
 const STORAGE_KEY_HISTORY = 'ohms_calculator_history_v2';
@@ -294,11 +294,11 @@ export default function App() {
       )}
 
       {/* TOP BAR CONTRACT (Strict 3-zone contract) */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-3.5 flex items-center justify-between gap-8">
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-3.5 flex items-center justify-between gap-3 md:gap-8 max-w-full overflow-hidden">
         {/* Zone 1: Single element brand wordmark */}
-        <a href="/" className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-amber-500" />
-          <span>欧姆定律全能计算器</span>
+        <a href="/" className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 flex items-center gap-2">
+          <Zap className="w-5 h-5 text-amber-500 shrink-0" />
+          <span className="truncate max-w-[150px] sm:max-w-none">欧姆定律全能计算器</span>
         </a>
 
         {/* Zone 2: Navigation links */}
@@ -338,30 +338,30 @@ export default function App() {
         </nav>
 
         {/* Zone 3: Primary actions (Precision, Share, Theme toggle) */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setIsPrecisionModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5 focus:ring-2 focus:ring-amber-500"
+            className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 focus:ring-2 focus:ring-amber-500"
             title="自定义有效数字/小数精度"
             tabIndex={0}
           >
-            <Sliders className="w-3.5 h-3.5 text-amber-500" />
+            <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             <span className="hidden sm:inline">精度设置</span>
           </button>
 
           <button
             onClick={() => setIsShareModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5 shadow-xs focus:ring-2 focus:ring-amber-500"
+            className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1 shadow-xs focus:ring-2 focus:ring-amber-500"
             title="分享带参数链接给同事"
             tabIndex={0}
           >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>分享链接</span>
+            <Share2 className="w-3.5 h-3.5 shrink-0" />
+            <span>分享</span>
           </button>
 
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus:ring-2 focus:ring-amber-500"
+            className="p-1.5 sm:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus:ring-2 focus:ring-amber-500"
             title={isDarkMode ? '切换亮色模式' : '切换暗色模式'}
             tabIndex={0}
             aria-label="Toggle dark mode"
@@ -372,7 +372,7 @@ export default function App() {
       </header>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 md:p-6 flex flex-col gap-6 max-w-full overflow-x-hidden">
         {/* If a related tool is selected in mobile/top nav, render its full view */}
         {activeRelatedTool !== 'none' && (
           <div className="flex flex-col gap-4">
@@ -397,7 +397,7 @@ export default function App() {
 
         {/* MAIN CALCULATOR DASHBOARD */}
         {activeRelatedTool === 'none' && (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 max-w-full overflow-x-hidden">
             {/* Target Calculation Segmented Control */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex flex-col">
@@ -412,7 +412,7 @@ export default function App() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full md:w-auto">
                 <button
                   onClick={() => setTarget('I')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
+                  className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
                     target === 'I'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
@@ -424,7 +424,7 @@ export default function App() {
 
                 <button
                   onClick={() => setTarget('U')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
+                  className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
                     target === 'U'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
@@ -436,7 +436,7 @@ export default function App() {
 
                 <button
                   onClick={() => setTarget('R')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
+                  className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
                     target === 'R'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
@@ -448,7 +448,7 @@ export default function App() {
 
                 <button
                   onClick={() => setTarget('P')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
+                  className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:ring-2 focus:ring-amber-500 ${
                     target === 'P'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
@@ -475,10 +475,24 @@ export default function App() {
               </div>
             )}
 
+            {/* FREE-TEXT FORMULA / EXPRESSION PARSER INPUT */}
+            <FormulaExpressionParser
+              onApplyParsedValues={(p) => {
+                if (p.target) setTarget(p.target);
+                if (p.uVal !== undefined) setUValStr(p.uVal.toString());
+                if (p.uUnit) setUUnit(p.uUnit);
+                if (p.iVal !== undefined) setIValStr(p.iVal.toString());
+                if (p.iUnit) setIUnit(p.iUnit);
+                if (p.rVal !== undefined) setRValStr(p.rVal.toString());
+                if (p.rUnit) setRUnit(p.rUnit);
+                showToast('已从解析表达式同步更新物理参数！');
+              }}
+            />
+
             {/* 2-COLUMN SPLIT: Left Input Parameters, Right Interactive Circuit Diagram */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* INPUT PANEL (5 Columns) */}
-              <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col gap-5">
+              <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col gap-5 max-w-full">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <span>参数输入与单位规范</span>
@@ -510,7 +524,7 @@ export default function App() {
                     </label>
 
                     <span className="text-[11px] text-slate-500 font-mono">
-                      SI基准: {toSI(uNum || 0, VOLTAGE_UNITS[uUnit].multiplier)} V
+                      SI: {toSI(uNum || 0, VOLTAGE_UNITS[uUnit].multiplier)} V
                     </span>
                   </div>
 
@@ -521,7 +535,7 @@ export default function App() {
                       disabled={target === 'U'}
                       value={target === 'U' && calcResult.isValid ? formatWithPrecision(calcResult.u_display, precision) : uValStr}
                       onChange={(e) => setUValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors ${
+                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors min-w-0 ${
                         target === 'U'
                           ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
                           : isInputInvalid(uValStr)
@@ -536,7 +550,7 @@ export default function App() {
                     <select
                       value={uUnit}
                       onChange={(e) => setUUnit(e.target.value as VoltageUnit)}
-                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer"
+                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
                       tabIndex={0}
                     >
                       {Object.values(VOLTAGE_UNITS).map((u) => (
@@ -562,7 +576,7 @@ export default function App() {
                     </label>
 
                     <span className="text-[11px] text-slate-500 font-mono">
-                      SI基准: {toSI(iNum || 0, CURRENT_UNITS[iUnit].multiplier)} A
+                      SI: {toSI(iNum || 0, CURRENT_UNITS[iUnit].multiplier)} A
                     </span>
                   </div>
 
@@ -573,7 +587,7 @@ export default function App() {
                       disabled={target === 'I'}
                       value={target === 'I' && calcResult.isValid ? formatWithPrecision(calcResult.i_display, precision) : iValStr}
                       onChange={(e) => setIValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors ${
+                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors min-w-0 ${
                         target === 'I'
                           ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
                           : isInputInvalid(iValStr)
@@ -587,7 +601,7 @@ export default function App() {
                     <select
                       value={iUnit}
                       onChange={(e) => setIUnit(e.target.value as CurrentUnit)}
-                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer"
+                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
                       tabIndex={0}
                     >
                       {Object.values(CURRENT_UNITS).map((u) => (
@@ -613,7 +627,7 @@ export default function App() {
                     </label>
 
                     <span className="text-[11px] text-slate-500 font-mono">
-                      SI基准: {toSI(rNum || 0, RESISTANCE_UNITS[rUnit].multiplier)} Ω
+                      SI: {toSI(rNum || 0, RESISTANCE_UNITS[rUnit].multiplier)} Ω
                     </span>
                   </div>
 
@@ -624,7 +638,7 @@ export default function App() {
                       disabled={target === 'R'}
                       value={target === 'R' && calcResult.isValid ? formatWithPrecision(calcResult.r_display, precision) : rValStr}
                       onChange={(e) => setRValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors ${
+                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors min-w-0 ${
                         target === 'R'
                           ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
                           : isInputInvalid(rValStr)
@@ -638,7 +652,7 @@ export default function App() {
                     <select
                       value={rUnit}
                       onChange={(e) => setRUnit(e.target.value as ResistanceUnit)}
-                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer"
+                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
                       tabIndex={0}
                     >
                       {Object.values(RESISTANCE_UNITS).map((u) => (
@@ -664,7 +678,7 @@ export default function App() {
                     </label>
 
                     <span className="text-[11px] text-slate-500 font-mono">
-                      SI基准: {calcResult.isValid ? calcResult.p_watts : 0} W
+                      SI: {calcResult.isValid ? calcResult.p_watts : 0} W
                     </span>
                   </div>
 
@@ -675,7 +689,7 @@ export default function App() {
                       disabled={target === 'P'}
                       value={target === 'P' && calcResult.isValid ? formatWithPrecision(calcResult.p_display, precision) : calcResult.isValid ? formatWithPrecision(calcResult.p_display, precision) : pValStr}
                       onChange={(e) => setPValStr(e.target.value)}
-                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors ${
+                      className={`flex-1 p-2.5 rounded-lg text-sm font-mono transition-colors min-w-0 ${
                         target === 'P'
                           ? 'bg-amber-100/50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800'
                           : 'bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
@@ -687,7 +701,7 @@ export default function App() {
                     <select
                       value={pUnit}
                       onChange={(e) => setPUnit(e.target.value as PowerUnit)}
-                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer"
+                      className="p-2.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 font-mono cursor-pointer shrink-0"
                       tabIndex={0}
                     >
                       {Object.values(POWER_UNITS).map((u) => (
@@ -699,10 +713,13 @@ export default function App() {
               </div>
 
               {/* RIGHT VISUAL CIRCUIT DIAGRAM (7 Columns) */}
-              <div className="lg:col-span-7 flex flex-col gap-6">
+              <div className="lg:col-span-7 flex flex-col gap-6 max-w-full">
                 <CircuitDiagram result={calcResult} precision={precision} />
               </div>
             </div>
+
+            {/* FORMULA WHEEL (欧姆定律经典物理公式轮盘) */}
+            <FormulaWheel onSelectTarget={(newTarget) => setTarget(newTarget)} />
 
             {/* FORMULA SUBSTITUTION STEPS & REVERSE VERIFICATION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

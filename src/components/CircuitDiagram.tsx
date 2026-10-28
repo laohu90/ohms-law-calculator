@@ -73,7 +73,7 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
       </div>
 
       {/* SVG Canvas for Circuit */}
-      <div className="relative w-full overflow-hidden bg-slate-950 rounded-lg p-2 border border-slate-800 flex items-center justify-center">
+      <div className="relative w-full overflow-hidden bg-slate-950 rounded-lg p-2 border border-slate-800 flex items-center justify-center max-w-full">
         <svg
           viewBox="0 0 600 320"
           className="w-full h-auto max-h-[300px] select-none"
@@ -93,9 +93,9 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
           </defs>
 
           {/* Wire Background Path */}
-          {/* Loop coordinates: Left (100, 160), Top (100, 50) -> (500, 50), Right (500, 160), Bottom (500, 270) -> (100, 270) */}
+          {/* Loop coordinates: Left (90, 160), Top (90, 50) -> (450, 50), Right (450, 160), Bottom (450, 270) -> (90, 270) */}
           <path
-            d="M 100 160 L 100 50 L 500 50 L 500 270 L 100 270 Z"
+            d="M 90 160 L 90 50 L 450 50 L 450 270 L 90 270 Z"
             fill="none"
             stroke="#334155"
             strokeWidth="6"
@@ -105,7 +105,7 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
 
           {/* Active Conducting Wire */}
           <path
-            d="M 100 160 L 100 50 L 500 50 L 500 270 L 100 270 Z"
+            d="M 90 160 L 90 50 L 450 50 L 450 270 L 90 270 Z"
             fill="none"
             stroke={isSwitchClosed ? '#38bdf8' : '#475569'}
             strokeWidth="3"
@@ -118,7 +118,7 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
           />
 
           {/* BATTERY / POWER SOURCE (Left Vertical Wire) */}
-          <g transform="translate(100, 160)">
+          <g transform="translate(90, 160)">
             <rect x="-30" y="-35" width="60" height="70" rx="6" fill="#0f172a" stroke="#38bdf8" strokeWidth="2" />
             {/* Battery Plates */}
             <line x1="-18" y1="-15" x2="18" y2="-15" stroke="#38bdf8" strokeWidth="4" />
@@ -131,14 +131,14 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
             <text x="-35" y="30" fill="#3b82f6" fontSize="16" fontWeight="bold">-</text>
 
             {/* Label U */}
-            <rect x="-70" y="-12" width="65" height="24" rx="4" fill="#1e293b" stroke="#0ea5e9" strokeWidth="1" />
-            <text x="-38" y="4" fill="#38bdf8" fontSize="12" fontWeight="bold" textAnchor="middle">
+            <rect x="-65" y="-12" width="65" height="24" rx="4" fill="#1e293b" stroke="#0ea5e9" strokeWidth="1" />
+            <text x="-33" y="4" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle">
               U = {formatWithPrecision(u_display, precision)} {getUnitSymbol(u_unit)}
             </text>
           </g>
 
           {/* SWITCH (Top Wire, near left-center) */}
-          <g transform="translate(250, 50)">
+          <g transform="translate(230, 50)">
             <circle cx="-25" cy="0" r="4" fill="#38bdf8" />
             <circle cx="25" cy="0" r="4" fill="#38bdf8" />
             {/* Switch Blade */}
@@ -158,7 +158,7 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
           </g>
 
           {/* RESISTOR (Right Vertical Wire) */}
-          <g transform="translate(500, 160)">
+          <g transform="translate(450, 160)">
             {/* Thermal Glow Effect background */}
             {isSwitchClosed && p_watts > 0 && (
               <rect
@@ -183,13 +183,13 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
 
             {/* Label R */}
             <rect x="25" y="-12" width="85" height="24" rx="4" fill="#1e293b" stroke="#f59e0b" strokeWidth="1" />
-            <text x="67" y="4" fill="#fbbf24" fontSize="12" fontWeight="bold" textAnchor="middle">
+            <text x="67" y="4" fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="middle">
               R = {formatWithPrecision(r_display, precision)} {getUnitSymbol(r_unit)}
             </text>
           </g>
 
           {/* CURRENT INDICATOR (Bottom Wire) */}
-          <g transform="translate(300, 270)">
+          <g transform="translate(270, 270)">
             {/* Ammeter Circle */}
             <circle cx="0" cy="0" r="22" fill="#0f172a" stroke="#10b981" strokeWidth="2.5" />
             <text x="0" y="5" fill="#34d399" fontSize="14" fontWeight="bold" textAnchor="middle">
@@ -209,18 +209,18 @@ export const CircuitDiagram: React.FC<CircuitDiagramProps> = ({
 
             {/* Label I */}
             <rect x="-65" y="30" width="130" height="26" rx="4" fill="#1e293b" stroke="#10b981" strokeWidth="1" />
-            <text x="0" y="47" fill="#34d399" fontSize="12" fontWeight="bold" textAnchor="middle">
+            <text x="0" y="47" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">
               I = {isSwitchClosed ? `${formatWithPrecision(i_display, precision)} ${getUnitSymbol(i_unit)}` : '0 A (断路)'}
             </text>
           </g>
 
           {/* POWER DISSIPATION BADGE (Center of Circuit) */}
-          <g transform="translate(300, 160)">
-            <rect x="-70" y="-30" width="140" height="60" rx="8" fill="#0f172a" stroke="#ec4899" strokeWidth="1.5" />
+          <g transform="translate(270, 160)">
+            <rect x="-65" y="-28" width="130" height="56" rx="8" fill="#0f172a" stroke="#ec4899" strokeWidth="1.5" />
             <text x="0" y="-8" fill="#cbd5e1" fontSize="11" textAnchor="middle">
               回路功耗 (Power P)
             </text>
-            <text x="0" y="16" fill="#f472b6" fontSize="15" fontWeight="bold" textAnchor="middle">
+            <text x="0" y="16" fill="#f472b6" fontSize="14" fontWeight="bold" textAnchor="middle">
               P = {isSwitchClosed ? `${formatWithPrecision(p_display, precision)} ${getUnitSymbol(p_unit)}` : '0 W'}
             </text>
           </g>
